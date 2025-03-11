@@ -56,6 +56,21 @@ uint16 rpm = 1000u;
 
 extern UART_HandleTypeDef huart1;
 osMessageQueueId_t rxQueue;
+
+osThreadId_t TaskCommRxHandle;
+const osThreadAttr_t rx_attributes = {
+  .name = "RxTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
+
+osThreadId_t TaskCommTxHandle;
+const osThreadAttr_t tx_attributes = {
+  .name = "TxTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
+
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -100,6 +115,8 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  TaskCommRxHandle = osThreadNew(Task_Comm_Rx, NULL, &rx_attributes);
+  TaskCommTxHandle = osThreadNew(Task_Comm_Tx, NULL, &tx_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -128,6 +145,34 @@ void StartDefaultTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+void Task_Comm_Tx(void *argument)
+{
+	while(1);
+}
 
+void Task_Comm_Rx(void *argument)
+{
+	uint8 received_data[BUFFER_SIZE];
+
+	    /* Infinite loop */
+	while(1)
+	{
+	    // Esperar a recibir un dato de la cola
+	    osMessageQueueGet(rxQueue, received_data, NULL, osWaitForever);
+
+	    // Procesar los datos recibidos (por ejemplo, imprimirlos) o enviarlos a la señal que le corresponde
+	    if(70u == received_data[1])
+	    {
+	        rpmVh = (received_data[8] << 8);
+	        rpmVh |= (received_data[9]);
+	    }
+
+	    printf("[TCU]:");
+	    for (uint16 i = 0; i < BUFFER_SIZE; i++) {
+	        printf("%c", received_data[i]);
+	    }
+	    printf("\n");
+	}
+}
 /* USER CODE END Application */
 

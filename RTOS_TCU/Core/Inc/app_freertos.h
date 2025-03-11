@@ -52,13 +52,15 @@ extern "C" {
 
 /* Exported macro -------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+extern osThreadId_t TaskCommTxHandle;
+extern osThreadId_t TaskCommRxHandle;
 /* USER CODE END EM */
 extern osThreadId_t defaultTaskHandle;
 
 /* Exported function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+void Task_Comm_Rx(void *argument);
+void Task_Comm_Tx(void *argument);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
