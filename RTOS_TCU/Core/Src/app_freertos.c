@@ -22,7 +22,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "Platform_Types.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -56,6 +55,20 @@ uint16 rpm = 1000u;
 
 extern UART_HandleTypeDef huart1;
 osMessageQueueId_t rxQueue;
+
+osThreadId_t TaskInitHandle;
+const osThreadAttr_t TaskInit_attributes = {
+  .name = "TaskInit",
+  .priority = (osPriority_t) osPriorityNormal1,
+  .stack_size = 128 * 4
+};
+
+osThreadId_t TaskSWCHandle;
+const osThreadAttr_t TaskSWC_attributes = {
+  .name = "TaskSWC",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
 
 osThreadId_t TaskCommRxHandle;
 const osThreadAttr_t rx_attributes = {
@@ -109,14 +122,19 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  rxQueue = osMessageQueueNew(RX_QUEUE_SIZE, BUFFER_SIZE, NULL);
   /* USER CODE END RTOS_QUEUES */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+
   TaskCommRxHandle = osThreadNew(Task_Comm_Rx, NULL, &rx_attributes);
   TaskCommTxHandle = osThreadNew(Task_Comm_Tx, NULL, &tx_attributes);
+
+  TaskInitHandle = osThreadNew(Task_Init, NULL, &TaskInit_attributes);
+  TaskSWCHandle = osThreadNew(Task_SWC, NULL, &TaskSWC_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -137,18 +155,125 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    printf("Topicos...\n\r");
-    HAL_Delay(1000);
   }
   /* USER CODE END defaultTask */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+/**
+* @brief Function implementing the Task that initialize SWC.
+* @param argument: Not used
+* @retval None
+*/
+void Task_Init(void *argument)
+{
+	TCU_SWC_initialize();
+
+	// Terminate the task once it has completed its work
+	osThreadTerminate(TaskInitHandle);
+}
+
+/**
+* @brief Function implementing the Task that handle SWC.
+* @param argument: Not used
+* @retval None
+*/
+void Task_SWC(void *argument)
+{
+
+	while(1)
+	{
+		// ************* Input values **********
+		// Assign value to PRND variable of model
+		TCU_SWC_U.PRND = PRND_position();
+		TCU_SWC_U.Ignition_status = ignition_toggle();
+		TCU_SWC_U.AccePedalPosition = HAL_GPIO_ReadPin(GPIOG, GPIO_PIN_1);
+		TCU_SWC_U.BrakePosition = BreakPedal_toggle();
+
+		// ************* Call TCU model ********
+		TCU_SWC_step();
+
+		// ************* Output values *********
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, TCU_SWC_Y.P);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, TCU_SWC_Y.R);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, TCU_SWC_Y.N);
+		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_3, TCU_SWC_Y.D);
+	}
+}
+
 void Task_Comm_Tx(void *argument)
 {
-	while(1);
-}
+	while(1)
+	  {
+		  if(((IGNITION_ON == Get_ignitionStatus()) || (IGNITION_OFF == Get_ignitionStatus())) && (PARKING_ACTIVE == Get_PRND()))
+		  {
+			  printf("[PRND]: Parking\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else if((IGNITION_ON == Get_ignitionStatus()) && (REVERSE_ACTIVE == Get_PRND()))
+		  {
+			  printf("[PRND]: Reverse\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else if((IGNITION_ON == Get_ignitionStatus()) && (NEUTRAL_ACTIVE == Get_PRND()))
+		  {
+			  printf("[PRND]: Neutral\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else if((IGNITION_ON == Get_ignitionStatus()) && (DRIVE_ACTIVE == Get_PRND()))
+		  {
+			  printf("[PRND]: Drive\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else
+		  {
+			  // Do nothing
+		  }
+
+		  if(IGNITION_ON == Get_ignitionStatus())
+		  {
+			  printf("[IGNITION]: ON\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else if(IGNITION_OFF == Get_ignitionStatus())
+		  {
+			  printf("[IGNITION]: OFF\n");
+			  HAL_Delay(600);  // retardo de .6 segundos
+		  } else
+		  {
+
+		  }
+
+		 // Estoy enviando los datos de la velocidad
+		  txBuffer[0] = 100;		// ECU ID
+		  txBuffer[1] = 66;		// signal ID
+		  txBuffer[9] = speed;
+		 for (uint16 i = 0; i < BUFFER_SIZE; i++) {
+			printf("%c", txBuffer[i]);
+		 }
+		 printf("\n");
+		 HAL_Delay(600);  // retardo de 5 segundo
+
+		 // Estoy enviando los datos de las revoluciones
+		  txBuffer[0] = 100;	// ECU ID
+		  txBuffer[1] = 67;		// signal ID
+		  txBuffer[8] = (rpm >> 8);
+		  txBuffer[9] = (rpm);
+		 for (uint16 i = 0; i < BUFFER_SIZE; i++) {
+			printf("%c", txBuffer[i]);
+		 }
+		 printf("\n");
+		 HAL_Delay(600);  // retardo de 5 segundo
+
+		 // Estoy enviando los datos de las revoluciones recibidas
+		  txBuffer[0] = 100;	// ECU ID
+		  txBuffer[1] = 70;		// signal ID
+		  txBuffer[8] = (rpmVh >> 8);
+		  txBuffer[9] = (rpmVh);
+		 for (uint16 i = 0; i < BUFFER_SIZE; i++) {
+			printf("%c", txBuffer[i]);
+		 }
+		 printf("\n");
+		 HAL_Delay(600);  // retardo de 5 segundo
+	  }
+ }
 
 void Task_Comm_Rx(void *argument)
 {

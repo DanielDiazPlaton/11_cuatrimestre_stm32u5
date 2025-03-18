@@ -32,7 +32,10 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "Platform_Types.h"
+#include "TCU_SWC.h"
+#include "TCU_helper.h"
+#include "model_getset.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -52,6 +55,9 @@ extern "C" {
 
 /* Exported macro -------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
+extern osThreadId_t TaskSWCHandle;
+extern osThreadId_t TaskInitHandle;
+
 extern osThreadId_t TaskCommTxHandle;
 extern osThreadId_t TaskCommRxHandle;
 /* USER CODE END EM */
@@ -59,6 +65,9 @@ extern osThreadId_t defaultTaskHandle;
 
 /* Exported function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+void Task_SWC(void *argument);
+void Task_Init(void *argument);
+
 void Task_Comm_Rx(void *argument);
 void Task_Comm_Tx(void *argument);
 /* USER CODE END FunctionPrototypes */

@@ -175,7 +175,22 @@ void USART1_IRQHandler(void)
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
+  if (__HAL_UART_GET_IT_SOURCE(&huart1, UART_IT_RXNE))
+    {
+        uint8 received_data = (uint8_t)(huart1.Instance->RDR & (uint8_t)0x00FF);  // Leer el dato recibido
 
+        if (rxIndex < BUFFER_SIZE) {
+            rxBuffer[rxIndex++] = received_data;
+        }
+
+        if (rxIndex >= BUFFER_SIZE) {
+            // Colocar el dato recibido en la cola para ser procesado por la tarea
+            osMessageQueuePut(rxQueue, rxBuffer, 0, 0);  // Coloca el dato en la cola (sin espera)
+
+            // Resetear el índice para la próxima recepción
+            rxIndex = 0;
+        }
+    }
   /* USER CODE END USART1_IRQn 1 */
 }
 
@@ -189,22 +204,7 @@ void TIM17_IRQHandler(void)
   /* USER CODE END TIM17_IRQn 0 */
   HAL_TIM_IRQHandler(&htim17);
   /* USER CODE BEGIN TIM17_IRQn 1 */
-  if (__HAL_UART_GET_IT_SOURCE(&huart1, UART_IT_RXNE))
-  {
-      uint8 received_data = (uint8_t)(huart1.Instance->RDR & (uint8_t)0x00FF);  // Leer el dato recibido
 
-      if (rxIndex < BUFFER_SIZE) {
-          rxBuffer[rxIndex++] = received_data;
-      }
-
-      if (rxIndex >= BUFFER_SIZE) {
-          // Colocar el dato recibido en la cola para ser procesado por la tarea
-          osMessageQueuePut(rxQueue, rxBuffer, 0, 0);  // Coloca el dato en la cola (sin espera)
-
-          // Resetear el índice para la próxima recepción
-          rxIndex = 0;
-      }
-  }
   /* USER CODE END TIM17_IRQn 1 */
 }
 
